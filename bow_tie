@@ -1,0 +1,87 @@
+import numpy as np
+import scipy
+import networkx as nx
+
+def bow_tie(G, adjacency):#adjacency = nx.to_scipy_sparse_matrix(G)
+    np.seterr(divide='ignore', invalid='ignore')#0徐算で起こるWarningを表示しない
+    length = G.number_of_nodes()
+    components = max(nx.strongly_connected_components(G), key=len)
+    components  = list(components)
+    if len(components) == 1:
+            scc_in1 = np.ones(length)
+            in_tendril1 = np.zeros(length)
+            scc = np.zeros(length)
+            out_tendril1 = np.zeros(length)
+            scc_out1 = np.zeros(length)
+            tube = np.zeros(length)
+            other = np.zeros(length)
+            return scc_in1, in_tendril1, scc, out_tendril1, scc_out1, tube, other
+    nodes = list(G.nodes())
+    adjacency = adjacency + scipy.sparse.eye(length)#自己ループ付きのadjacency
+    scc = np.zeros(length)
+    ones = np.ones(length)
+    intersects = np.isin(nodes, components)#重複する要素True
+    indices = np.where(intersects)#重複する要素のnodesのindex
+    scc[indices] = 1
+    scc_difference = ones - scc
+    scc_copy = scc
+    loop1 = [1]
+    for i in loop1:
+        scc_in1 = adjacency @ scc_copy#行列積
+        scc_in2 = adjacency @ scc_in1
+        if np.count_nonzero(scc_in2) != np.count_nonzero(scc_in1):#全てのINを網羅すると0の数が一致する。
+            loop1.append(i+1)
+            scc_copy = scc_in1
+        else:
+            scc_in1 = scc_in1 * scc_difference#要素積を用い、SCCを省く
+            scc_in1 /= scc_in1#０徐算が起こる
+            scc_in1 = np.nan_to_num(scc_in1)#NaN to 0
+    scc_copy = scc
+    loop2 = [1]
+    for i in loop2:
+        scc_out1 = scc_copy @ adjacency
+        scc_out2 = scc_out1 @ adjacency 
+        if np.count_nonzero(scc_out2) != np.count_nonzero(scc_out1):
+            loop2.append(i+1)
+            scc_copy = scc_out1
+        else:
+            scc_out1 = scc_out1 * scc_difference
+            scc_out1 /= scc_out1
+            scc_out1 = np.nan_to_num(scc_out1)
+    difference = scc_difference - scc_in1 - scc_out1
+    in_copy = scc_in1
+    loop3 = [1]
+    for i in loop3:
+        in_tendril1 = in_copy @ adjacency
+        in_tendril1 = in_tendril1 * difference
+        in_tendril2 = in_tendril1 @ adjacency
+        in_tendril2 = in_tendril2 * difference
+        if np.count_nonzero(in_tendril2) != np.count_nonzero(in_tendril1):
+            loop3.append(i+1)
+            in_copy = in_tendril1
+        else:
+            in_tendril1 /= in_tendril1
+            in_tendril1 = np.nan_to_num(in_tendril1)
+    out_copy = scc_out1
+    loop4 = [1]
+    for i in loop4:
+        out_tendril1 = (adjacency @ out_copy) * difference
+        out_tendril2 = (adjacency @ out_tendril1) * difference
+        if np.count_nonzero(out_tendril2) != np.count_nonzero(out_tendril1):
+            loop4.append(i+1)
+            out_copy = out_tendril1
+        else:
+            out_tendril1 /= out_tendril1
+            out_tendril1 = np.nan_to_num(out_tendril1)
+    in_sum = np.sum(scc_in1)
+    out_sum = np.sum(scc_out1)
+    if in_sum == 0 and out_sum == 0:#INとOUTがなかった場合
+        tube = np.zeros(length)
+    elif in_sum == 0 or out_sum ==0:
+        tube = np.zeros(length)
+    else:
+        tube = in_tendril1 * out_tendril1
+        in_tendril1 = in_tendril1 - tube
+        out_tendril1 = out_tendril1 - tube
+    other = ones - scc_in1 - in_tendril1 - scc - out_tendril1 - scc_out1 - tube
+    return scc_in1, in_tendril1, scc, out_tendril1, scc_out1, tube, other#, [loop1[-1], loop2[-1], loop3[-1], loop4[-1]]
