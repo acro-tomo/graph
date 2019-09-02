@@ -1,0 +1,15 @@
+import numpy as np
+import scipy
+
+def potential(adjacency):# adjacency = nx.to_scipy_sparse_matrix(G)
+    W = adjacency + adjacency.T
+    rowsum_W = np.sum(W.T, axis=0)
+    rowsum_W = np.array(rowsum_W)[0]
+    D = scipy.sparse.diags(rowsum_W)
+    F = adjacency - adjacency.T
+    b = np.sum(F.T, axis=0)
+    b = np.array(b.T)
+    L = D - W
+    
+    x = scipy.sparse.linalg.cgs(L, b)
+    return x[0] - np.mean(x[0])
